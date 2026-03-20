@@ -215,7 +215,7 @@ def crawl_naver_themes() -> dict[str, list[str]]:
             "User-Agent": "Mozilla/5.0"
         })
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
 
         # 테마 리스트 추출
         theme_links = soup.select("td.col_type1 a")
@@ -235,7 +235,7 @@ def crawl_naver_themes() -> dict[str, list[str]]:
                     "User-Agent": "Mozilla/5.0"
                 })
                 detail_resp.raise_for_status()
-                detail_soup = BeautifulSoup(detail_resp.text, "lxml")
+                detail_soup = BeautifulSoup(detail_resp.text, "html.parser")
 
                 stock_links = detail_soup.select("div.name_area a[href*='main.naver?code=']")
                 stocks = []
