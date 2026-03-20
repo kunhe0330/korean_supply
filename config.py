@@ -20,7 +20,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # ── DB ───────────────────────────────────────────────────
-DB_PATH = os.environ.get("DB_PATH", os.path.join("db", "supply.db"))
+DB_PATH = os.environ.get("DB_PATH", os.path.join("storage", "supply.db"))
 
 # ── Rate Limit ───────────────────────────────────────────
 API_RATE_LIMIT = {
