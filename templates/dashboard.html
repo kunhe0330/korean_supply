@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>수급 분석 대시보드</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, 'Malgun Gothic', '맑은 고딕', sans-serif;
+    background: #0f1923;
+    color: #e0e6ed;
+    line-height: 1.6;
+}
+
+/* ── 헤더 ─────────────────────── */
+.header {
+    background: linear-gradient(135deg, #1a2634 0%, #0f1923 100%);
+    border-bottom: 1px solid #2a3a4a;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+}
+.header h1 span { color: #4ecdc4; }
+.header-date {
+    font-size: 14px;
+    color: #8899aa;
+}
+.header-refresh {
+    background: #2a3a4a;
+    border: none;
+    color: #8899aa;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.header-refresh:hover { background: #3a4a5a; color: #fff; }
+
+/* ── 요약 카드 ────────────────── */
+.summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 20px 24px;
+}
+.summary-card {
+    background: #1a2634;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    border: 1px solid #2a3a4a;
+}
+.summary-card .number {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+}
+.summary-card .label {
+    font-size: 12px;
+    color: #8899aa;
+    margin-top: 4px;
+}
+.summary-card.accent .number { color: #ff6b6b; }
+.summary-card.green .number { color: #4ecdc4; }
+.summary-card.yellow .number { color: #ffd93d; }
+.summary-card.blue .number { color: #6c9fff; }
+
+/* ── 메인 콘텐츠 ─────────────── */
+.content { padding: 0 24px 24px; }
+
+.section {
+    margin-bottom: 24px;
+}
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.section-title .icon { font-size: 20px; }
+
+/* ── 주도 섹터 카드 ───────────── */
+.sector-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+.sector-card {
+    background: #1a2634;
+    border-radius: 16px;
+    border: 1px solid #2a3a4a;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+.sector-card:hover { transform: translateY(-2px); }
+.sector-card.rank-1 { border-color: #ff6b6b; }
+.sector-card.rank-2 { border-color: #ffd93d; }
+.sector-card.rank-3 { border-color: #4ecdc4; }
+
+.sector-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.sector-rank {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+.rank-1 .sector-rank { background: #ff6b6b; color: #fff; }
+.rank-2 .sector-rank { background: #ffd93d; color: #1a2634; }
+.rank-3 .sector-rank { background: #4ecdc4; color: #1a2634; }
+
+.sector-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    flex: 1;
+    margin-left: 12px;
+}
+.sector-score-badge {
+    background: rgba(78, 205, 196, 0.15);
+    color: #4ecdc4;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+.rank-1 .sector-score-badge {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+}
+
+.sector-stocks {
+    padding: 0 20px 16px;
+}
+.stock-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid #2a3a4a;
+    gap: 10px;
+}
+.stock-name {
+    font-weight: 600;
+    color: #e0e6ed;
+    min-width: 100px;
+}
+.stock-code {
+    font-size: 11px;
+    color: #667788;
+}
+.stock-score-bar {
+    flex: 1;
+    height: 6px;
+    background: #2a3a4a;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.stock-score-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s ease;
+}
+.stock-score-num {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 35px;
+    text-align: right;
+}
+
+/* ── 신호등 배지 ──────────────── */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.badge-breakout { background: #ff6b6b22; color: #ff6b6b; }
+.badge-vdu { background: #ffd93d22; color: #ffd93d; }
+.badge-accel { background: #4ecdc422; color: #4ecdc4; }
+.badge-handover { background: #6c9fff22; color: #6c9fff; }
+.badge-strong { background: #ff6b6b22; color: #ff6b6b; }
+
+/* ── 완성형 패턴 (하이라이트) ─── */
+.perfect-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+}
+.perfect-card {
+    background: linear-gradient(135deg, #2a1a1a 0%, #1a2634 100%);
+    border: 1px solid #ff6b6b55;
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+.perfect-card .stock-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+}
+.perfect-card .metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.metric {
+    background: #0f1923;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+.metric .val { font-weight: 700; color: #fff; }
+.metric .lbl { color: #667788; margin-right: 4px; }
+
+/* ── 전체 종목 테이블 ─────────── */
+.stock-table-wrap {
+    background: #1a2634;
+    border-radius: 16px;
+    border: 1px solid #2a3a4a;
+    overflow-x: auto;
+}
+.stock-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.stock-table th {
+    background: #0f1923;
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #8899aa;
+    font-size: 12px;
+    position: sticky;
+    top: 0;
+}
+.stock-table td {
+    padding: 10px 16px;
+    border-top: 1px solid #2a3a4a;
+}
+.stock-table tr:hover { background: #1e2e3e; }
+
+.score-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* ── 점수 색상 ────────────────── */
+.score-high { color: #ff6b6b; }
+.score-mid { color: #ffd93d; }
+.score-low { color: #8899aa; }
+.fill-high { background: #ff6b6b; }
+.fill-mid { background: #ffd93d; }
+.fill-low { background: #4ecdc4; }
+.fill-grey { background: #556677; }
+
+/* ── 상태 표시 ────────────────── */
+.stage-label {
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.stage-BREAKOUT { background: #ff6b6b33; color: #ff6b6b; }
+.stage-VDU { background: #ffd93d33; color: #ffd93d; }
+.stage-PULLBACK { background: #6c9fff33; color: #6c9fff; }
+.stage-BIG_MOVE { background: #4ecdc433; color: #4ecdc4; }
+.stage-NONE { background: #33445533; color: #667788; }
+
+/* ── 비어있을 때 ──────────────── */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #556677;
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state p { font-size: 15px; }
+
+/* ── 로딩 ─────────────────────── */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #667788;
+}
+.spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #2a3a4a;
+    border-top-color: #4ecdc4;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 탭 ───────────────────────── */
+.tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    background: #1a2634;
+    padding: 4px;
+    border-radius: 12px;
+    width: fit-content;
+}
+.tab {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: #667788;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+.tab.active {
+    background: #4ecdc4;
+    color: #0f1923;
+}
+.tab:hover:not(.active) { color: #e0e6ed; }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── 설명 툴팁 ────────────────── */
+.help-tip {
+    display: inline-block;
+    width: 16px; height: 16px;
+    background: #2a3a4a;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 16px;
+    font-size: 10px;
+    color: #667788;
+    cursor: help;
+    position: relative;
+}
+.help-tip:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2a3a4a;
+    color: #e0e6ed;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* ── 반응형 ───────────────────── */
+@media (max-width: 768px) {
+    .header { flex-wrap: wrap; gap: 8px; }
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .sector-cards { grid-template-columns: 1fr; }
+    .content { padding: 0 12px 12px; }
+    .summary-row { padding: 12px; }
+    .stock-table { font-size: 12px; }
+    .stock-table th, .stock-table td { padding: 8px 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<div class="header">
+    <h1><span>&#x1f4ca;</span> 수급 분석 대시보드</h1>
+    <span class="header-date" id="headerDate">-</span>
+    <button class="header-refresh" onclick="loadAll()">&#x21bb; 새로고침</button>
+</div>
+
+<!-- 요약 카드 -->
+<div class="summary-row" id="summaryRow">
+    <div class="summary-card"><div class="number" id="sumTotal">-</div><div class="label">분석 종목</div></div>
+    <div class="summary-card accent"><div class="number" id="sumSupply">-</div><div class="label">수급 유입</div></div>
+    <div class="summary-card green"><div class="number" id="sumVdu">-</div><div class="label">VDU 감지</div></div>
+    <div class="summary-card yellow"><div class="number" id="sumBreakout">-</div><div class="label">Breakout!</div></div>
+    <div class="summary-card blue"><div class="number" id="sumLeading">-</div><div class="label">주도 섹터</div></div>
+</div>
+
+<!-- 메인 콘텐츠 -->
+<div class="content">
+
+    <!-- 완성형 패턴 (있을 때만) -->
+    <div class="section" id="perfectSection" style="display:none">
+        <div class="section-title">
+            <span class="icon">&#x2b50;</span> 완성형 패턴 발생!
+            <span class="help-tip" data-tip="수급 스코어 75이상 + Breakout + 체결강도 150%이상 = 가장 강한 신호">?</span>
+        </div>
+        <div class="perfect-list" id="perfectList"></div>
+    </div>
+
+    <!-- 주도 섹터 -->
+    <div class="section">
+        <div class="section-title">
+            <span class="icon">&#x1f525;</span> 주도 섹터
+            <span class="help-tip" data-tip="기관과 외국인 자금이 집중적으로 몰리는 업종/테마">?</span>
+        </div>
+        <div class="sector-cards" id="sectorCards">
+            <div class="loading"><div class="spinner"></div>불러오는 중...</div>
+        </div>
+    </div>
+
+    <!-- 탭: 전체 종목 / 수급 유입 / VDU/Breakout -->
+    <div class="section">
+        <div class="section-title">
+            <span class="icon">&#x1f4cb;</span> 종목 리스트
+        </div>
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('all')">전체 TOP 50</button>
+            <button class="tab" onclick="switchTab('supply')">수급 유입</button>
+            <button class="tab" onclick="switchTab('pattern')">패턴 감지</button>
+        </div>
+
+        <div id="tab-all" class="tab-content active">
+            <div class="stock-table-wrap">
+                <table class="stock-table" id="stockTableAll">
+                    <thead><tr>
+                        <th>종목명</th>
+                        <th>점수 <span class="help-tip" data-tip="0~100점. 높을수록 기관/외인 수급이 강함">?</span></th>
+                        <th>상태</th>
+                        <th>체결강도 <span class="help-tip" data-tip="100%이상이면 매수세 우위. 150%이상이면 매우 강함">?</span></th>
+                        <th>수급흐름 <span class="help-tip" data-tip="가속=점점 더 세게 매수 중, 손바뀜=개인 매도를 기관이 받아먹는 중">?</span></th>
+                        <th>지수대비</th>
+                    </tr></thead>
+                    <tbody id="tbodyAll"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-supply" class="tab-content">
+            <div class="stock-table-wrap">
+                <table class="stock-table" id="stockTableSupply">
+                    <thead><tr>
+                        <th>종목명</th>
+                        <th>점수</th>
+                        <th>상태</th>
+                        <th>체결강도</th>
+                        <th>수급흐름</th>
+                        <th>지수대비</th>
+                    </tr></thead>
+                    <tbody id="tbodySupply"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-pattern" class="tab-content">
+            <div class="stock-table-wrap">
+                <table class="stock-table" id="stockTablePattern">
+                    <thead><tr>
+                        <th>종목명</th>
+                        <th>점수</th>
+                        <th>상태</th>
+                        <th>체결강도</th>
+                        <th>설명</th>
+                    </tr></thead>
+                    <tbody id="tbodyPattern"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let reportData = null;
+
+// ── 데이터 로드 ──────────────────
+async function loadAll() {
+    try {
+        const resp = await fetch('/api/supply-report');
+        if (!resp.ok) throw new Error('데이터 없음');
+        reportData = await resp.json();
+        renderAll();
+    } catch (e) {
+        document.getElementById('sectorCards').innerHTML =
+            '<div class="empty-state"><div class="icon">&#x1f4ad;</div>'
+            + '<p>아직 분석 데이터가 없습니다</p>'
+            + '<p style="font-size:13px;margin-top:8px;color:#445566">평일 15:50 이후 첫 데이터가 수집됩니다</p></div>';
+    }
+}
+
+function renderAll() {
+    if (!reportData) return;
+    renderDate();
+    renderSummary();
+    renderPerfect();
+    renderSectors();
+    renderStockTable('all');
+    renderStockTable('supply');
+    renderStockTable('pattern');
+}
+
+// ── 날짜 ─────────────────────────
+function renderDate() {
+    const d = reportData.date;
+    if (!d) return;
+    const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
+    const dt = new Date(y, m-1, day);
+    const weekdays = ['일','월','화','수','목','금','토'];
+    document.getElementById('headerDate').textContent =
+        `${y}-${m}-${day} (${weekdays[dt.getDay()]}) 기준`;
+}
+
+// ── 요약 카드 ────────────────────
+function renderSummary() {
+    const s = reportData.summary || {};
+    document.getElementById('sumTotal').textContent = s.total_stocks || 0;
+    document.getElementById('sumSupply').textContent = s.supply_in || 0;
+    document.getElementById('sumVdu').textContent = s.vdu_count || 0;
+    document.getElementById('sumBreakout').textContent = s.breakout_count || 0;
+    document.getElementById('sumLeading').textContent =
+        (reportData.leading_sectors || []).length;
+}
+
+// ── 완성형 패턴 ──────────────────
+function renderPerfect() {
+    const stocks = (reportData.supply_stocks || []).filter(s =>
+        s.score_total >= 75 && s.stage === 'BREAKOUT' && s.vol_power_today >= 150
+    );
+    const section = document.getElementById('perfectSection');
+    const list = document.getElementById('perfectList');
+    if (stocks.length === 0) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    list.innerHTML = stocks.map(s => `
+        <div class="perfect-card">
+            <div class="stock-title">&#x2b50; ${s.stock_name || s.stock_code} (${s.stock_code})</div>
+            <div class="metrics">
+                <div class="metric"><span class="lbl">점수</span><span class="val">${Math.round(s.score_total)}</span></div>
+                <div class="metric"><span class="lbl">체결강도</span><span class="val">${Math.round(s.vol_power_today)}%</span></div>
+                <div class="metric"><span class="lbl">지수대비</span><span class="val">${s.rel_strength_1m ? s.rel_strength_1m.toFixed(1)+'%' : '-'}</span></div>
+                <div class="metric badge badge-breakout">BREAKOUT!</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ── 주도 섹터 ────────────────────
+function renderSectors() {
+    const sectors = reportData.leading_sectors || [];
+    const container = document.getElementById('sectorCards');
+
+    if (sectors.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">&#x1f50d;</div><p>아직 주도 섹터가 없습니다</p></div>';
+        return;
+    }
+
+    container.innerHTML = sectors.slice(0, 5).map((s, i) => {
+        const rank = i + 1;
+        const topStocks = (s.top_stocks || []).slice(0, 4);
+        const stockRows = topStocks.map(st => {
+            const score = st.score || 0;
+            const fillClass = score >= 70 ? 'fill-high' : score >= 50 ? 'fill-mid' : 'fill-low';
+            const scoreClass = score >= 70 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+            return `
+                <div class="stock-row">
+                    <span class="stock-name">${st.name || st.code}</span>
+                    <span class="stock-code">${st.code}</span>
+                    <div class="stock-score-bar"><div class="stock-score-fill ${fillClass}" style="width:${score}%"></div></div>
+                    <span class="stock-score-num ${scoreClass}">${Math.round(score)}</span>
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="sector-card rank-${rank}">
+                <div class="sector-header">
+                    <div class="sector-rank">${rank}</div>
+                    <div class="sector-name">${s.sector_name}</div>
+                    <div class="sector-score-badge">평균 ${Math.round(s.avg_score)}점</div>
+                </div>
+                <div class="sector-stocks">${stockRows}</div>
+            </div>`;
+    }).join('');
+}
+
+// ── 종목 테이블 ──────────────────
+function renderStockTable(type) {
+    let stocks = reportData.supply_stocks || [];
+    let tbody;
+
+    if (type === 'all') {
+        tbody = document.getElementById('tbodyAll');
+        stocks = stocks.slice(0, 50);
+    } else if (type === 'supply') {
+        tbody = document.getElementById('tbodySupply');
+        stocks = stocks.filter(s => (s.score_total || 0) >= 50);
+    } else {
+        tbody = document.getElementById('tbodyPattern');
+        stocks = stocks.filter(s => s.vdu_flag || s.breakout_flag);
+    }
+
+    if (stocks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#556677">해당 종목이 없습니다</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = stocks.map(s => {
+        const score = Math.round(s.score_total || 0);
+        const scoreClass = score >= 70 ? 'score-high' : score >= 50 ? 'score-mid' : 'score-low';
+        const vp = Math.round(s.vol_power_today || 0);
+        const vpColor = vp >= 150 ? '#ff6b6b' : vp >= 120 ? '#ffd93d' : vp >= 100 ? '#4ecdc4' : '#667788';
+
+        // 상태 배지
+        const stage = s.stage || 'NONE';
+        const stageLabel = {
+            'BREAKOUT': '&#x1f4a5; 돌파!',
+            'VDU': '&#x23f3; 거래량 위축',
+            'PULLBACK': '&#x1f4c9; 건전한 조정',
+            'BIG_MOVE': '&#x1f680; 큰 상승 중',
+            'NONE': '-'
+        }[stage] || stage;
+
+        // 수급 흐름
+        let flowBadges = '';
+        if (s.acceleration_flag) flowBadges += '<span class="badge badge-accel">가속중</span> ';
+        if (s.handover_flag) flowBadges += '<span class="badge badge-handover">손바뀜</span> ';
+        if (!s.acceleration_flag && !s.handover_flag) flowBadges = '<span style="color:#556677">-</span>';
+
+        // 지수대비
+        const rs = s.rel_strength_1m;
+        let rsText = '-';
+        let rsColor = '#667788';
+        if (rs !== null && rs !== undefined) {
+            rsText = (rs >= 0 ? '+' : '') + rs.toFixed(1) + '%';
+            rsColor = rs >= 5 ? '#ff6b6b' : rs >= 0 ? '#4ecdc4' : '#667788';
+        }
+
+        // 패턴 설명 (pattern 탭)
+        let patternDesc = '';
+        if (type === 'pattern') {
+            if (s.breakout_flag) patternDesc = '거래량 폭발과 함께 가격 돌파 — 강한 매수 신호';
+            else if (s.vdu_flag) patternDesc = '거래량이 말라붙는 중 — 다음 돌파를 기다리는 단계';
+        }
+
+        return `<tr>
+            <td>
+                <div style="font-weight:600">${s.stock_name || s.stock_code}</div>
+                <div style="font-size:11px;color:#667788">${s.stock_code}${s.market ? ' · '+s.market : ''}</div>
+            </td>
+            <td><span class="score-pill ${scoreClass}">${score}</span></td>
+            <td><span class="stage-label stage-${stage}">${stageLabel}</span></td>
+            <td style="color:${vpColor};font-weight:600">${vp > 0 ? vp+'%' : '-'}</td>
+            <td>${type === 'pattern' ? patternDesc : flowBadges}</td>
+            ${type !== 'pattern' ? `<td style="color:${rsColor};font-weight:600">${rsText}</td>` : ''}
+        </tr>`;
+    }).join('');
+}
+
+// ── 탭 전환 ──────────────────────
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── 초기 로드 ────────────────────
+loadAll();
+// 5분마다 자동 새로고침
+setInterval(loadAll, 5 * 60 * 1000);
+</script>
+</body>
+</html>

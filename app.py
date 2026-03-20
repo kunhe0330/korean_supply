@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 from db.migrations import init_db, get_connection
 from scheduler.cron import init_scheduler
@@ -35,16 +35,7 @@ def _init_once():
 
 @app.route("/")
 def index():
-    return jsonify({
-        "service": "KIS Supply-Demand Sector Analyzer",
-        "status": "running",
-        "endpoints": [
-            "/api/supply-report",
-            "/api/supply-history/<stock_code>",
-            "/api/leading-sectors",
-            "/api/health",
-        ],
-    })
+    return render_template("dashboard.html")
 
 
 @app.route("/api/health")
