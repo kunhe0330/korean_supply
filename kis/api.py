@@ -143,11 +143,11 @@ def fetch_daily_trade_volume(stock_code: str, start_date: str, end_date: str) ->
     종목별일별매수매도체결량 (FHKST03010800)
     """
     params = {
-        "FID_COND_MRKT_DIV_CODE": "J",
-        "FID_INPUT_ISCD": stock_code,
-        "FID_INPUT_DATE_1": start_date,
-        "FID_INPUT_DATE_2": end_date,
-        "FID_PERIOD_DIV_CODE": "D",
+        "fid_cond_mrkt_div_code": "J",
+        "fid_input_iscd": stock_code,
+        "fid_input_date_1": start_date,
+        "fid_input_date_2": end_date,
+        "fid_period_div_code": "D",
     }
     return kis_get_list(
         "/uapi/domestic-stock/v1/quotations/inquire-daily-trade-volume",
