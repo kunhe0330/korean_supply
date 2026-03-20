@@ -402,7 +402,7 @@ body {
 <div class="summary-row" id="summaryRow">
     <div class="summary-card"><div class="number" id="sumTotal">-</div><div class="label">분석 종목</div></div>
     <div class="summary-card accent"><div class="number" id="sumSupply">-</div><div class="label">수급 유입</div></div>
-    <div class="summary-card green"><div class="number" id="sumVdu">-</div><div class="label">VDU 감지</div></div>
+    <div class="summary-card green"><div class="number" id="sumVdu">-</div><div class="label">Volume Dry Up</div></div>
     <div class="summary-card yellow"><div class="number" id="sumBreakout">-</div><div class="label">Breakout!</div></div>
     <div class="summary-card blue"><div class="number" id="sumLeading">-</div><div class="label">주도 섹터</div></div>
 </div>
@@ -632,7 +632,7 @@ function renderStockTable(type) {
         const stage = s.stage || 'NONE';
         const stageLabel = {
             'BREAKOUT': '&#x1f4a5; 돌파!',
-            'VDU': '&#x23f3; 거래량 위축',
+            'VDU': '&#x23f3; Volume Dry Up',
             'PULLBACK': '&#x1f4c9; 건전한 조정',
             'BIG_MOVE': '&#x1f680; 큰 상승 중',
             'NONE': '-'
@@ -657,7 +657,7 @@ function renderStockTable(type) {
         let patternDesc = '';
         if (type === 'pattern') {
             if (s.breakout_flag) patternDesc = '거래량 폭발과 함께 가격 돌파 — 강한 매수 신호';
-            else if (s.vdu_flag) patternDesc = '거래량이 말라붙는 중 — 다음 돌파를 기다리는 단계';
+            else if (s.vdu_flag) patternDesc = 'Volume Dry Up — 거래량이 말라붙는 중, 다음 돌파를 기다리는 단계';
         }
 
         return `<tr>
