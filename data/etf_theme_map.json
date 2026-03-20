@@ -1,0 +1,14 @@
+{
+    "_comment": "ETF코드 → 테마명 매핑 (2026년 기준, 런타임에 존재 여부 확인 필수)",
+    "_last_updated": "2026-03-20",
+    "mappings": {
+        "091160": "SEMICONDUCTOR",
+        "305720": "BATTERY",
+        "364960": "AI",
+        "139260": "BIO",
+        "251340": "SEMICONDUCTOR",
+        "396500": "DEFENSE",
+        "455030": "ROBOT",
+        "261250": "SHIPBUILDING"
+    }
+}

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(python -c \":*)",
+      "Bash(railway version:*)",
+      "Bash(railway --version)",
+      "Bash(gh auth:*)",
+      "Bash(railway whoami:*)",
+      "Bash(railway list:*)",
+      "Bash(railway vars:*)",
+      "Bash(railway variable:*)",
+      "Bash(railway link:*)",
+      "Bash(railway service:*)",
+      "Bash(railway status:*)",
+      "Bash(railway domain:*)"
+    ]
+  }
+}

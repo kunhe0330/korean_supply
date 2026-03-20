@@ -1,0 +1,38 @@
+{
+    "_comment": "자동 분류에 없거나, 보정이 필요한 종목의 수동 테마 매핑",
+    "_last_updated": "2026-03-20",
+    "themes": {
+        "AI": {
+            "description": "AI/인공지능 관련 (HW+SW)",
+            "stocks": ["005930", "000660", "035420", "035720"]
+        },
+        "BATTERY": {
+            "description": "2차전지/배터리",
+            "stocks": ["373220", "006400", "247540"]
+        },
+        "DEFENSE": {
+            "description": "방위산업/방산",
+            "stocks": ["012450", "079550", "047810"]
+        },
+        "SHIPBUILDING": {
+            "description": "조선",
+            "stocks": ["009540", "010140", "042660"]
+        },
+        "ROBOT": {
+            "description": "로봇/자동화",
+            "stocks": ["277810", "454910"]
+        },
+        "NUCLEAR": {
+            "description": "원자력발전",
+            "stocks": ["034020", "052690"]
+        },
+        "BIO": {
+            "description": "바이오/제약",
+            "stocks": ["207940", "068270", "326030"]
+        },
+        "SEMICONDUCTOR": {
+            "description": "반도체",
+            "stocks": ["005930", "000660", "042700"]
+        }
+    }
+}
