@@ -37,6 +37,23 @@ def index():
     return render_template("dashboard.html")
 
 
+@app.route("/api/run-backfill", methods=["POST"])
+def run_backfill_api():
+    """Railway 서버에서 backfill 실행 (1회용)."""
+    import threading
+    from backfill import run_backfill
+
+    def _run():
+        try:
+            run_backfill()
+        except Exception as e:
+            logger.error("Backfill 실패: %s", e)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({"status": "backfill started", "message": "백그라운드에서 실행 중. /api/health로 진행 확인."})
+
+
 @app.route("/api/health")
 def health():
     conn = get_connection()
