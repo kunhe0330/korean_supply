@@ -1,5 +1,6 @@
 """
 SQLite 테이블 정의 — DDL SQL문 모음
+v3.0: VDU/Breakout 제거, 수급 유입 조건 필터 + 태그 시스템
 """
 
 SCHEMA_SQL = """
@@ -71,26 +72,32 @@ CREATE TABLE IF NOT EXISTS intraday_supply (
     PRIMARY KEY (stock_code, trade_date, time_slot)
 );
 
--- 일별 수급 스코어
+-- 일별 수급 스코어 (v3: 조건 필터 기반)
 CREATE TABLE IF NOT EXISTS supply_score (
     stock_code TEXT NOT NULL,
     calc_date TEXT NOT NULL,
-    score_total REAL,
+    -- 수급 유입 판별 (핵심)
+    is_inflow INTEGER DEFAULT 0,       -- 1=수급 유입 조건 충족
+    tags TEXT,                         -- JSON: 충족된 태그 ["가속","손바뀜","체결강도↑","거래량↑","RS강함"]
+    tag_count INTEGER DEFAULT 0,       -- 태그 수 (많을수록 확신도 높음)
+    -- 원시 데이터
     net_6m REAL,
     net_3m REAL,
     net_1m REAL,
     net_1w REAL,
-    acceleration_flag INTEGER,
-    handover_flag INTEGER,
-    vdu_flag INTEGER,
-    breakout_flag INTEGER,
+    net_today_amount REAL,             -- 당일 기관+외인 순매수 금액 (백만원)
+    acceleration_type TEXT,            -- FULL_ACCEL / SHORT_ACCEL / REVERSAL / DECEL / FLAT
+    handover_type TEXT,                -- HANDOVER_STRONG / HANDOVER_MILD / DISTRIBUTION / NONE
     vol_power_today REAL,
     vol_power_5d_avg REAL,
-    vol_power_trend TEXT,
-    stage TEXT,
-    theme_list TEXT,
+    vol_power_trend TEXT,              -- SURGE / RISING / STABLE / FALLING
+    vol_trend TEXT,                    -- EXPANDING / STABLE / CONTRACTING
+    vol_ratio_today REAL,              -- 당일거래량 / 20일평균
+    theme_list TEXT,                   -- JSON: 소속 테마 리스트
     rel_strength_1m REAL,
-    rel_strength_bonus REAL DEFAULT 0,
+    -- 참고용 스코어 (정렬 옵션 전용)
+    ref_score REAL DEFAULT 0,          -- 참고용 종합 스코어 (0~100)
+    ref_score_rs_bonus REAL DEFAULT 0, -- 상대강도 보너스 (0~10)
     sector_code TEXT,
     sector_name TEXT,
     PRIMARY KEY (stock_code, calc_date)
@@ -126,11 +133,9 @@ CREATE TABLE IF NOT EXISTS sector_analysis (
     sector_type TEXT NOT NULL,
     calc_date TEXT NOT NULL,
     total_net_amount REAL,
-    supply_stock_count INTEGER,
-    avg_score REAL,
-    vdu_count INTEGER,
-    breakout_count INTEGER,
-    top_stocks TEXT,
+    supply_stock_count INTEGER,        -- 수급 유입(is_inflow=1) 종목 수
+    avg_score REAL,                    -- 평균 참고용 스코어
+    top_stocks TEXT,                   -- JSON: 순매수 금액 상위 5개 종목
     is_leading INTEGER,
     rank INTEGER,
     PRIMARY KEY (sector_code, calc_date)
@@ -147,6 +152,12 @@ CREATE INDEX IF NOT EXISTS idx_price_daily_date ON price_daily(trade_date);
 CREATE INDEX IF NOT EXISTS idx_price_daily_stock ON price_daily(stock_code);
 CREATE INDEX IF NOT EXISTS idx_index_daily_market ON index_daily(market, trade_date);
 CREATE INDEX IF NOT EXISTS idx_supply_score_date ON supply_score(calc_date);
-CREATE INDEX IF NOT EXISTS idx_supply_score_stage ON supply_score(stage);
+CREATE INDEX IF NOT EXISTS idx_supply_score_inflow ON supply_score(is_inflow);
 CREATE INDEX IF NOT EXISTS idx_sector_analysis_date ON sector_analysis(calc_date);
+"""
+
+# v3 마이그레이션: 기존 supply_score, sector_analysis 테이블 재생성
+MIGRATION_V3_SQL = """
+DROP TABLE IF EXISTS supply_score;
+DROP TABLE IF EXISTS sector_analysis;
 """

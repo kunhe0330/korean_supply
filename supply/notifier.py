@@ -1,5 +1,6 @@
 """
-텔레그램 알림 — 장중 즉시 알림 + 일별 리포트
+텔레그램 알림 v3 — 장중 즉시 알림 + 일별 리포트
+태그 기반 표시: ★ = 강화 태그 수
 """
 
 import json
@@ -21,7 +22,6 @@ def _send_telegram(text: str):
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    # 4096자 제한 분할 전송
     chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)]
     for chunk in chunks:
         try:
@@ -34,6 +34,22 @@ def _send_telegram(text: str):
                 logger.warning("텔레그램 전송 실패: %s", resp.text)
         except Exception as e:
             logger.error("텔레그램 전송 에러: %s", e)
+
+
+def _format_amount(amount_million: float) -> str:
+    """백만원 단위를 억 단위로 변환."""
+    if abs(amount_million) >= 100:
+        return f"{amount_million / 100:+,.0f}억"
+    return f"{amount_million:+,.0f}백만"
+
+
+def _format_tags(tags_list: list, tag_count: int) -> str:
+    """태그 + ★ 수 포맷."""
+    if not tags_list:
+        return ""
+    tags_str = "·".join(tags_list)
+    stars = "★" * tag_count
+    return f"[{tags_str}] {stars}"
 
 
 def send_intraday_alert(alerts: list[dict], rotation: list[dict]):
@@ -51,11 +67,9 @@ def send_intraday_alert(alerts: list[dict], rotation: list[dict]):
             lines.append(f"  {r['sector']}: {direction} ({r['change_pct']:+.0f}%)")
         lines.append("")
 
-    # 알림 타입별 그룹핑
     sign_changes = [a for a in alerts if a["type"] == "SIGN_CHANGE"]
     accels = [a for a in alerts if a["type"] == "ACCEL"]
     vp_surges = [a for a in alerts if a["type"] == "VOL_POWER_SURGE"]
-    vdu_alerts = [a for a in alerts if a["type"] == "VDU_INFLOW"]
 
     if sign_changes or accels:
         lines.append("🔥 종목 수급 급변")
@@ -67,24 +81,17 @@ def send_intraday_alert(alerts: list[dict], rotation: list[dict]):
         lines.append("💪 체결강도 급등 (상위 30 스크리닝)")
         for a in vp_surges:
             lines.append(f"  {a['stock_name']}({a['stock_code']}): {a['detail']}")
-        lines.append("")
-
-    if vdu_alerts:
-        lines.append("⭐ VDU 종목 수급 유입!")
-        for a in vdu_alerts:
-            lines.append(f"  {a['stock_name']}({a['stock_code']}): {a['detail']}")
 
     _send_telegram("\n".join(lines))
 
 
 def send_daily_report(analysis_result: dict):
-    """일별 수급 리포트 텔레그램 전송."""
+    """일별 수급 리포트 텔레그램 전송 (v3)."""
     calc_date = analysis_result.get("calc_date", "")
     leading = analysis_result.get("leading_sectors", [])
     all_sectors = analysis_result.get("all_sectors", [])
     stock_results = analysis_result.get("stock_results", [])
 
-    # 날짜 포맷
     try:
         dt = datetime.strptime(calc_date, "%Y%m%d")
         weekday = ["월", "화", "수", "목", "금", "토", "일"][dt.weekday()]
@@ -97,95 +104,72 @@ def send_daily_report(analysis_result: dict):
     # 주도 섹터
     for i, sector in enumerate(leading[:3]):
         emoji = "🔥" if i == 0 else "📈"
-        lines.append(f"{emoji} 주도 섹터 #{i + 1}: {sector['sector_name']} (스코어 {sector['avg_score']:.0f})")
+        net_str = _format_amount(sector.get("total_net_amount", 0))
+        lines.append(f"{emoji} 주도 섹터 #{i + 1}: {sector['sector_name']} (순매수 {net_str})")
 
         top_stocks = sector.get("top_stocks", [])
         for j, s in enumerate(top_stocks[:3]):
             connector = "└" if j == len(top_stocks[:3]) - 1 else "├"
             code = s.get("code", "")
             name = s.get("name", "")
-            score = s.get("score", 0)
 
-            # 해당 종목 상세 정보
-            detail = _find_stock_detail(stock_results, code)
-            stage_str = _format_stage(detail)
-            vp_str = f"체결강도{detail.get('vol_power_today', 0):.0f}%" if detail else ""
+            # 태그 표시
+            try:
+                tags_list = json.loads(s.get("tags", "[]")) if isinstance(s.get("tags"), str) else (s.get("tags") or [])
+            except (json.JSONDecodeError, TypeError):
+                tags_list = []
+            tag_count = s.get("tag_count", 0)
+            tags_str = _format_tags(tags_list, tag_count)
 
-            star = "⭐ " if detail and detail.get("breakout_flag") else ""
-            lines.append(f"{connector} {star}{name}({code}): [{stage_str} {vp_str}]")
+            net_amt = _format_amount(s.get("net_amount", 0))
+            vp = s.get("vol_power", 0)
+            vp_str = f"체결{vp:.0f}%" if vp else ""
+            rs = s.get("rs_1m")
+            rs_str = f"RS{rs:+.1f}%" if rs else ""
+
+            star = "⭐ " if tag_count >= 4 else ""
+            detail_parts = [p for p in [vp_str, rs_str] if p]
+            detail_str = " ".join(detail_parts)
+
+            lines.append(f"{connector} {star}{name}({code}): {net_amt} {tags_str} {detail_str}")
 
         lines.append("")
 
     # 신규 부상 섹터
-    new_sectors = [s for s in all_sectors if not s.get("is_leading") and s.get("avg_score", 0) > 50]
-    new_sectors.sort(key=lambda x: -x.get("avg_score", 0))
+    new_sectors = [s for s in all_sectors if not s.get("is_leading") and s.get("supply_stock_count", 0) >= 2]
+    new_sectors.sort(key=lambda x: -(x.get("total_net_amount") or 0))
     if new_sectors:
         s = new_sectors[0]
-        lines.append(f"🆕 신규 부상: {s['sector_name']} (스코어 {s['avg_score']:.0f})")
+        net_str = _format_amount(s.get("total_net_amount", 0))
+        lines.append(f"🆕 신규 부상: {s['sector_name']} (순매수 {net_str})")
         if s.get("top_stocks"):
             ts = s["top_stocks"][0]
             lines.append(f"└ {ts.get('name', '')}({ts.get('code', '')})")
         lines.append("")
 
-    # 완성형 패턴
-    perfect = [r for r in stock_results
-               if r.get("score_total", 0) >= 75
-               and r.get("stage") == "BREAKOUT"
-               and r.get("vol_power_today", 0) >= 150]
-    if perfect:
-        lines.append("⭐ 완성형 패턴 (수급+체결강도+VDU+Breakout):")
-        for p in perfect[:3]:
-            name = _get_stock_name(p["stock_code"])
-            rs_str = f"지수대비{p.get('rel_strength_1m', 0):+.1f}%" if p.get("rel_strength_1m") else ""
-            lines.append(
-                f"└ {name}({p['stock_code']}) — "
-                f"점수{p['score_total']:.0f}+RS{p.get('rel_strength_bonus', 0):.0f} / "
-                f"체결강도{p.get('vol_power_today', 0):.0f}% / {rs_str}"
-            )
+    # 수급 이탈 주의
+    exiting = [s for s in all_sectors if (s.get("total_net_amount") or 0) < -500]
+    exiting.sort(key=lambda x: x.get("total_net_amount") or 0)
+    if exiting:
+        s = exiting[0]
+        net_str = _format_amount(s.get("total_net_amount", 0))
+        lines.append(f"📉 수급 이탈 주의: {s['sector_name']} (순매도 {net_str})")
         lines.append("")
 
     # 요약
     lines.append("━" * 20)
     total = len(stock_results)
-    supply_in = len([r for r in stock_results if r.get("score_total", 0) >= 50])
-    vp_high = len([r for r in stock_results if r.get("vol_power_today", 0) >= 150])
-    vdu_count = len([r for r in stock_results if r.get("vdu_flag")])
-    bo_count = len([r for r in stock_results if r.get("breakout_flag")])
+    inflow_count = len([r for r in stock_results if r.get("is_inflow")])
+    vp_high = len([r for r in stock_results if (r.get("vol_power_today") or 0) >= 150])
+    rs_strong = len([r for r in stock_results if (r.get("rel_strength_1m") or 0) >= 5])
 
     lines.append(f"전체 스캔: {total}종목")
-    lines.append(f"수급 유입: {supply_in}개 / 체결강도 150%↑: {vp_high}개 / VDU: {vdu_count}개 / Breakout: {bo_count}개")
+    lines.append(f"수급 유입: {inflow_count}개 / 체결강도 150%↑: {vp_high}개 / RS +5%↑: {rs_strong}개")
+    lines.append("")
+    lines.append("※ ★ = 강화 태그 수 (가속/손바뀜/체결강도↑/거래량↑/RS강함)")
+    lines.append("  ★★★★~5: ⭐ 수급 집중 / ★★★: 강한 수급 / ★~2: 유입 확인")
 
     _send_telegram("\n".join(lines))
-
-
-def _find_stock_detail(results: list, code: str) -> dict:
-    for r in results:
-        if r.get("stock_code") == code:
-            return r
-    return {}
-
-
-def _format_stage(detail: dict) -> str:
-    if not detail:
-        return ""
-    stage = detail.get("stage", "NONE")
-    parts = []
-    if stage == "BREAKOUT":
-        vol_exp = detail.get("breakout_detail", {}).get("volume_expansion", 0)
-        parts.append(f"BREAKOUT! 거래량×{vol_exp:.1f}")
-    elif stage == "VDU":
-        parts.append("VDU")
-    elif stage == "PULLBACK":
-        parts.append("PULLBACK·수급유지")
-    elif stage == "BIG_MOVE":
-        parts.append("BIG MOVE")
-
-    if detail.get("handover") and "HANDOVER" in detail.get("handover", ""):
-        parts.append("손바뀜")
-    if detail.get("acceleration") in ("FULL_ACCEL", "SHORT_ACCEL"):
-        parts.append("가속↑")
-
-    return "·".join(parts)
 
 
 def _get_stock_name(stock_code: str) -> str:

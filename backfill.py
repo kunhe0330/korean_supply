@@ -51,7 +51,7 @@ def run_backfill():
     logger.info("[3/7] 투자자매매동향 수집 (과거 %d일)...", BACKFILL_DAYS)
     supply_count = collect_investor_trade_daily(target_codes, today)
     if supply_count == 0:
-        logger.warning("⚠️ 수급 데이터 수집 실패 — KIS API 시간 제한일 수 있음 (15:40 이전에만 가능)")
+        logger.warning("수급 데이터 수집 실패 — KIS API 시간 제한일 수 있음 (15:40 이전에만 가능)")
 
     # Step 4: OHLCV 수집
     logger.info("[4/7] OHLCV 수집...")
@@ -74,8 +74,9 @@ def run_backfill():
 
     try:
         analysis_result = run_analysis(target_codes)
+        inflow_count = sum(1 for r in analysis_result.get("stock_results", []) if r.get("is_inflow"))
         leading_count = len(analysis_result.get("leading_sectors", []))
-        logger.info("분석 완료: 주도 섹터 %d개 판별", leading_count)
+        logger.info("분석 완료: 수급유입 %d개, 주도 섹터 %d개 판별", inflow_count, leading_count)
     except Exception as e:
         logger.warning("분석 실행 실패: %s", e)
 
@@ -87,6 +88,7 @@ def run_backfill():
         price_count = conn.execute("SELECT COUNT(*) as c FROM price_daily").fetchone()["c"]
         index_count = conn.execute("SELECT COUNT(*) as c FROM index_daily").fetchone()["c"]
         score_count = conn.execute("SELECT COUNT(*) as c FROM supply_score").fetchone()["c"]
+        inflow_count = conn.execute("SELECT COUNT(*) as c FROM supply_score WHERE is_inflow = 1").fetchone()["c"]
         sector_count = conn.execute("SELECT COUNT(*) as c FROM sector_analysis").fetchone()["c"]
     finally:
         conn.close()
@@ -98,6 +100,7 @@ def run_backfill():
     logger.info("  일별 가격: %d건", price_count)
     logger.info("  지수 데이터: %d건", index_count)
     logger.info("  수급 스코어: %d건", score_count)
+    logger.info("  수급 유입: %d건", inflow_count)
     logger.info("  섹터 분석: %d건", sector_count)
     logger.info("=" * 60)
 

@@ -1,6 +1,7 @@
 """
-장중 수급 모니터링 — 하루 4회 폴링
+장중 수급 모니터링 v3 — 하루 4회 폴링
 09:40, 11:30, 13:30, 14:40 실행
+VDU 참조 제거 — is_inflow 기반 대상 선정
 """
 
 import logging
@@ -16,20 +17,19 @@ from supply.collector import _safe_int
 
 logger = logging.getLogger(__name__)
 
-# 시간대 슬롯 매핑: 폴링 시각 → 예상 API 데이터 슬롯
 POLLING_SLOTS = {
-    "09:40": "1",  # 09:30 입력분
-    "11:30": "3",  # 11:20 입력분
-    "13:30": "4",  # 13:20 입력분
-    "14:40": "5",  # 14:30 입력분
+    "09:40": "1",
+    "11:30": "3",
+    "13:30": "4",
+    "14:40": "5",
 }
 
 
 def get_polling_targets() -> list[str]:
     """
     장중 폴링 대상 종목 선정.
-    1. 전일 수급 스코어 상위 50종목
-    2. VDU 감지 종목
+    1. 전일 참고용 스코어 상위 50종목
+    2. 수급 유입(is_inflow=1) 종목
     3. 주도 섹터 소속 종목
     """
     conn = get_connection()
@@ -42,23 +42,24 @@ def get_polling_targets() -> list[str]:
 
         last_date = yesterday["d"]
 
+        # 스코어 상위 50
         rows = conn.execute(
             """SELECT stock_code FROM supply_score
                WHERE calc_date = ?
-               ORDER BY score_total DESC
+               ORDER BY ref_score DESC
                LIMIT 50""",
             (last_date,),
         ).fetchall()
 
         codes = set(r["stock_code"] for r in rows)
 
-        # VDU 종목 추가
-        vdu_rows = conn.execute(
+        # 수급 유입 종목 추가
+        inflow_rows = conn.execute(
             """SELECT stock_code FROM supply_score
-               WHERE calc_date = ? AND vdu_flag = 1""",
+               WHERE calc_date = ? AND is_inflow = 1""",
             (last_date,),
         ).fetchall()
-        codes.update(r["stock_code"] for r in vdu_rows)
+        codes.update(r["stock_code"] for r in inflow_rows)
 
         return sorted(codes)
     finally:
@@ -66,16 +67,12 @@ def get_polling_targets() -> list[str]:
 
 
 def poll_intraday_supply() -> dict:
-    """
-    장중 추정 수급 수집 + 변화 감지.
-    Returns: {"alerts": [...], "sector_rotation": [...]}
-    """
+    """장중 추정 수급 수집 + 변화 감지."""
     now = datetime.now()
     today = now.strftime("%Y%m%d")
     time_str = now.strftime("%H:%M")
     collected_at = now.strftime("%H:%M:%S")
 
-    # 현재 시간에 해당하는 슬롯 결정
     current_slot = None
     for poll_time, slot in POLLING_SLOTS.items():
         if time_str >= poll_time:
@@ -116,18 +113,15 @@ def poll_intraday_supply() -> dict:
                     (code, today, slot, frgn, orgn, total, collected_at),
                 )
 
-            # 이전 시간대 대비 변화 감지
             alert = _check_stock_alert(conn, code, today, current_slot)
             if alert:
                 alerts.append(alert)
 
         conn.commit()
 
-        # 체결강도 스크리닝
         vp_alerts = _check_volume_power_screening(conn, today)
         alerts.extend(vp_alerts)
 
-        # 섹터 로테이션 감지
         rotation = _check_sector_rotation(conn, today, current_slot)
 
     finally:
@@ -141,7 +135,7 @@ def _check_stock_alert(conn, stock_code: str, today: str, current_slot: str) -> 
     """종목 단위 수급 급변 감지."""
     prev_slot = str(int(current_slot) - 1) if int(current_slot) > 1 else None
     if not prev_slot:
-        return None  # 1차 폴링은 baseline
+        return None
 
     prev = conn.execute(
         """SELECT frgn_est_net_qty, orgn_est_net_qty FROM intraday_supply
@@ -163,7 +157,6 @@ def _check_stock_alert(conn, stock_code: str, today: str, current_slot: str) -> 
     prev_orgn = prev["orgn_est_net_qty"] or 0
     curr_orgn = curr["orgn_est_net_qty"] or 0
 
-    # 외인 부호 전환
     if prev_frgn < 0 and curr_frgn > 0:
         name = conn.execute(
             "SELECT stock_name FROM stock_master WHERE stock_code = ?", (stock_code,)
@@ -175,7 +168,6 @@ def _check_stock_alert(conn, stock_code: str, today: str, current_slot: str) -> 
             "detail": f"외인 {prev_frgn:+,}→{curr_frgn:+,} (부호전환!)",
         }
 
-    # 기관 2배 이상 증가
     if prev_orgn > 0 and curr_orgn >= prev_orgn * 2:
         name = conn.execute(
             "SELECT stock_name FROM stock_master WHERE stock_code = ?", (stock_code,)
@@ -191,7 +183,7 @@ def _check_stock_alert(conn, stock_code: str, today: str, current_slot: str) -> 
 
 
 def _check_volume_power_screening(conn, today: str) -> list[dict]:
-    """체결강도 상위 30 스크리닝 — 기존 수급 TOP에 없던 종목 발견."""
+    """체결강도 상위 30 스크리닝."""
     alerts = []
     for market_code in ["0001", "1001"]:
         items = fetch_volume_power_ranking(market_code)
@@ -200,7 +192,6 @@ def _check_volume_power_screening(conn, today: str) -> list[dict]:
             vp = float(item.get("tday_rltv", "0") or "0")
             if vp < 200:
                 continue
-            # 기존 수급 TOP에 있는지 확인
             existing = conn.execute(
                 "SELECT 1 FROM supply_score WHERE stock_code = ? AND calc_date >= ?",
                 (code, today),
@@ -217,7 +208,6 @@ def _check_volume_power_screening(conn, today: str) -> list[dict]:
 
 def _check_sector_rotation(conn, today: str, current_slot: str) -> list[dict]:
     """섹터 로테이션 감지."""
-    # 간단한 구현: 섹터별 순매수 합산 변화
     prev_slot = str(int(current_slot) - 1) if int(current_slot) > 1 else None
     if not prev_slot:
         return []
@@ -249,16 +239,8 @@ def _check_sector_rotation(conn, today: str, current_slot: str) -> list[dict]:
         if prev_val and curr_val:
             change = (curr_val - prev_val) / abs(prev_val) * 100 if prev_val else 0
             if change > 100:
-                rotations.append({
-                    "sector": tid,
-                    "direction": "IN",
-                    "change_pct": round(change, 1),
-                })
+                rotations.append({"sector": tid, "direction": "IN", "change_pct": round(change, 1)})
             elif change < -50:
-                rotations.append({
-                    "sector": tid,
-                    "direction": "OUT",
-                    "change_pct": round(change, 1),
-                })
+                rotations.append({"sector": tid, "direction": "OUT", "change_pct": round(change, 1)})
 
     return rotations

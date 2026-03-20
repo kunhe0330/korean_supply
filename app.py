@@ -1,5 +1,5 @@
 """
-KIS Supply-Demand Sector Analyzer — Flask 메인 앱
+KIS Supply-Demand Sector Analyzer — Flask 메인 앱 v3
 """
 
 import json
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# 앱 시작 시 DB 초기화 + 스케줄러 시작
 _scheduler = None
 
 
@@ -45,6 +44,7 @@ def health():
         master = conn.execute("SELECT COUNT(*) as c FROM stock_master").fetchone()["c"]
         supply = conn.execute("SELECT COUNT(*) as c FROM daily_supply").fetchone()["c"]
         score = conn.execute("SELECT COUNT(*) as c FROM supply_score").fetchone()["c"]
+        inflow = conn.execute("SELECT COUNT(*) as c FROM supply_score WHERE is_inflow = 1").fetchone()["c"]
         last_date = conn.execute("SELECT MAX(calc_date) as d FROM supply_score").fetchone()["d"]
     finally:
         conn.close()
@@ -55,6 +55,7 @@ def health():
             "stock_master": master,
             "daily_supply": supply,
             "supply_score": score,
+            "inflow_count": inflow,
             "last_calc_date": last_date,
         },
     })
@@ -63,13 +64,12 @@ def health():
 @app.route("/api/supply-report")
 def supply_report():
     """
-    수급 리포트 JSON 조회.
-    Query params:
-    - date: YYYYMMDD (default: 최신)
-    - sector: 특정 섹터 필터
+    수급 리포트 JSON 조회 (v3).
+    기본 정렬: 기관+외인 순매수 금액 내림차순.
     """
     date = request.args.get("date")
     sector_filter = request.args.get("sector")
+    sort_by = request.args.get("sort", "amount")  # amount / ref_score / vol_power / rs
 
     conn = get_connection()
     try:
@@ -80,7 +80,6 @@ def supply_report():
         if not date:
             return jsonify({"error": "데이터 없음"}), 404
 
-        # 수급 스코어 상위 종목
         query = """
             SELECT ss.*, sm.stock_name, sm.market
             FROM supply_score ss
@@ -93,7 +92,15 @@ def supply_report():
             query += " AND ss.theme_list LIKE ?"
             params.append(f"%{sector_filter}%")
 
-        query += " ORDER BY ss.score_total DESC"
+        # 정렬
+        order_map = {
+            "amount": "ss.net_today_amount DESC",
+            "ref_score": "ss.ref_score DESC",
+            "vol_power": "ss.vol_power_today DESC",
+            "rs": "ss.rel_strength_1m DESC",
+            "tags": "ss.tag_count DESC, ss.net_today_amount DESC",
+        }
+        query += f" ORDER BY {order_map.get(sort_by, order_map['amount'])}"
 
         rows = conn.execute(query, params).fetchall()
         stocks = [dict(r) for r in rows]
@@ -111,15 +118,20 @@ def supply_report():
             if s.get("top_stocks"):
                 s["top_stocks"] = json.loads(s["top_stocks"])
 
+        # 요약 통계
+        inflow_count = len([s for s in stocks if s.get("is_inflow")])
+        vp_high = len([s for s in stocks if (s.get("vol_power_today") or 0) >= 150])
+        rs_strong = len([s for s in stocks if (s.get("rel_strength_1m") or 0) >= 5])
+
         return jsonify({
             "date": date,
             "leading_sectors": leading,
             "supply_stocks": stocks[:50],
             "summary": {
                 "total_stocks": len(stocks),
-                "supply_in": len([s for s in stocks if (s.get("score_total") or 0) >= 50]),
-                "vdu_count": len([s for s in stocks if s.get("vdu_flag")]),
-                "breakout_count": len([s for s in stocks if s.get("breakout_flag")]),
+                "inflow_count": inflow_count,
+                "vp_high_count": vp_high,
+                "rs_strong_count": rs_strong,
             },
         })
 
@@ -132,7 +144,6 @@ def supply_history(stock_code):
     """특정 종목의 수급 히스토리 + 스코어 변화."""
     conn = get_connection()
     try:
-        # 종목 정보
         stock = conn.execute(
             "SELECT * FROM stock_master WHERE stock_code = ?", (stock_code,)
         ).fetchone()
@@ -140,7 +151,6 @@ def supply_history(stock_code):
         if not stock:
             return jsonify({"error": "종목 없음"}), 404
 
-        # 스코어 히스토리 (최근 30일)
         scores = conn.execute(
             """SELECT * FROM supply_score
                WHERE stock_code = ?
@@ -148,7 +158,6 @@ def supply_history(stock_code):
             (stock_code,),
         ).fetchall()
 
-        # 수급 히스토리 (최근 60일)
         supply = conn.execute(
             """SELECT * FROM daily_supply
                WHERE stock_code = ?

@@ -1,5 +1,6 @@
 """
-섹터/테마별 집계 + 주도 섹터 판별
+섹터/테마별 집계 + 주도 섹터 판별 v3
+VDU/Breakout 제거 — is_inflow 기반 판별
 """
 
 import json
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 def aggregate_by_theme(calc_date: str) -> list[dict]:
     """
     stock_theme_map 기준 테마별 수급 집계.
-    한 종목이 여러 테마에 속할 수 있으므로 중복 카운트 허용.
+    v3: is_inflow 기반 수급 유입 종목 카운트.
     """
     conn = get_connection()
     try:
@@ -24,28 +25,28 @@ def aggregate_by_theme(calc_date: str) -> list[dict]:
                  stm.theme_id,
                  tm.theme_name,
                  ss.stock_code,
-                 ss.score_total,
+                 ss.is_inflow,
+                 ss.tags,
+                 ss.tag_count,
+                 ss.ref_score,
                  ss.net_1m,
-                 ss.acceleration_flag,
-                 ss.vdu_flag,
-                 ss.breakout_flag,
+                 ss.net_today_amount,
+                 ss.acceleration_type,
                  ss.vol_power_today,
-                 ss.stage,
+                 ss.rel_strength_1m,
                  sm.stock_name
                FROM supply_score ss
                JOIN stock_theme_map stm ON ss.stock_code = stm.stock_code
                LEFT JOIN theme_master tm ON stm.theme_id = tm.theme_id
                LEFT JOIN stock_master sm ON ss.stock_code = sm.stock_code
                WHERE ss.calc_date = ?
-               ORDER BY stm.theme_id, ss.score_total DESC""",
+               ORDER BY stm.theme_id, ss.net_today_amount DESC""",
             (calc_date,),
         ).fetchall()
 
         if not rows:
-            # Fallback: KRX 표준 업종으로 집계
             return _aggregate_by_krx_sector(conn, calc_date)
 
-        # 테마별 그룹핑
         themes: dict[str, dict] = {}
         for r in rows:
             tid = r["theme_id"]
@@ -59,18 +60,28 @@ def aggregate_by_theme(calc_date: str) -> list[dict]:
                     "accel_count": 0,
                 }
             themes[tid]["stocks"].append(dict(r))
-            themes[tid]["total_net_amount"] += r["net_1m"] or 0
-            if r["acceleration_flag"]:
+            themes[tid]["total_net_amount"] += r["net_today_amount"] or 0
+            if r["acceleration_type"] in ("FULL_ACCEL", "SHORT_ACCEL", "REVERSAL"):
                 themes[tid]["accel_count"] += 1
 
         result = []
         for tid, data in themes.items():
             stocks = data["stocks"]
-            supply_stocks = [s for s in stocks if (s["score_total"] or 0) >= 50]
-            scores = [s["score_total"] for s in stocks if s["score_total"]]
+            inflow_stocks = [s for s in stocks if s["is_inflow"]]
+            scores = [s["ref_score"] for s in stocks if s["ref_score"]]
 
             top_5 = [
-                {"code": s["stock_code"], "name": s["stock_name"], "score": s["score_total"]}
+                {
+                    "code": s["stock_code"],
+                    "name": s["stock_name"],
+                    "ref_score": s["ref_score"],
+                    "is_inflow": s["is_inflow"],
+                    "tags": s["tags"],
+                    "tag_count": s["tag_count"],
+                    "net_amount": s["net_today_amount"],
+                    "vol_power": s["vol_power_today"],
+                    "rs_1m": s["rel_strength_1m"],
+                }
                 for s in stocks[:5]
             ]
 
@@ -79,10 +90,8 @@ def aggregate_by_theme(calc_date: str) -> list[dict]:
                 "sector_name": data["sector_name"],
                 "sector_type": "THEME",
                 "total_net_amount": data["total_net_amount"],
-                "supply_stock_count": len(supply_stocks),
+                "supply_stock_count": len(inflow_stocks),
                 "avg_score": round(sum(scores) / len(scores), 1) if scores else 0,
-                "vdu_count": sum(1 for s in stocks if s["vdu_flag"]),
-                "breakout_count": sum(1 for s in stocks if s["breakout_flag"]),
                 "top_stocks": top_5,
                 "total_stock_count": len(stocks),
                 "accel_ratio": data["accel_count"] / len(stocks) if stocks else 0,
@@ -100,16 +109,20 @@ def _aggregate_by_krx_sector(conn, calc_date: str) -> list[dict]:
         """SELECT
              sm.sector_name,
              ss.stock_code,
-             ss.score_total,
+             ss.is_inflow,
+             ss.tags,
+             ss.tag_count,
+             ss.ref_score,
              ss.net_1m,
-             ss.acceleration_flag,
-             ss.vdu_flag,
-             ss.breakout_flag,
+             ss.net_today_amount,
+             ss.acceleration_type,
+             ss.vol_power_today,
+             ss.rel_strength_1m,
              sm.stock_name
            FROM supply_score ss
            JOIN stock_master sm ON ss.stock_code = sm.stock_code
            WHERE ss.calc_date = ?
-           ORDER BY sm.sector_name, ss.score_total DESC""",
+           ORDER BY sm.sector_name, ss.net_today_amount DESC""",
         (calc_date,),
     ).fetchall()
 
@@ -122,24 +135,32 @@ def _aggregate_by_krx_sector(conn, calc_date: str) -> list[dict]:
 
     result = []
     for sname, stocks in sectors.items():
-        supply_stocks = [s for s in stocks if (s["score_total"] or 0) >= 50]
-        scores = [s["score_total"] for s in stocks if s["score_total"]]
+        inflow_stocks = [s for s in stocks if s["is_inflow"]]
+        scores = [s["ref_score"] for s in stocks if s["ref_score"]]
         top_5 = [
-            {"code": s["stock_code"], "name": s["stock_name"], "score": s["score_total"]}
+            {
+                "code": s["stock_code"],
+                "name": s["stock_name"],
+                "ref_score": s["ref_score"],
+                "is_inflow": s["is_inflow"],
+                "tags": s["tags"],
+                "tag_count": s["tag_count"],
+                "net_amount": s["net_today_amount"],
+                "vol_power": s["vol_power_today"],
+                "rs_1m": s["rel_strength_1m"],
+            }
             for s in stocks[:5]
         ]
         result.append({
             "sector_code": sname,
             "sector_name": sname,
             "sector_type": "KRX",
-            "total_net_amount": sum(s["net_1m"] or 0 for s in stocks),
-            "supply_stock_count": len(supply_stocks),
+            "total_net_amount": sum(s["net_today_amount"] or 0 for s in stocks),
+            "supply_stock_count": len(inflow_stocks),
             "avg_score": round(sum(scores) / len(scores), 1) if scores else 0,
-            "vdu_count": sum(1 for s in stocks if s["vdu_flag"]),
-            "breakout_count": sum(1 for s in stocks if s["breakout_flag"]),
             "top_stocks": top_5,
             "total_stock_count": len(stocks),
-            "accel_ratio": sum(1 for s in stocks if s["acceleration_flag"]) / len(stocks) if stocks else 0,
+            "accel_ratio": sum(1 for s in stocks if s["acceleration_type"] in ("FULL_ACCEL", "SHORT_ACCEL", "REVERSAL")) / len(stocks) if stocks else 0,
         })
 
     return result
@@ -148,20 +169,16 @@ def _aggregate_by_krx_sector(conn, calc_date: str) -> list[dict]:
 def identify_leading_sectors(sector_list: list[dict]) -> list[dict]:
     """
     주도 섹터 판별 (3개 조건 중 2개 이상 충족).
-    1. 수급 스코어 60+ 종목이 3개 이상
+    1. 수급 유입(is_inflow=1) 종목이 3개 이상
     2. 섹터 합산 순매수 양(+)
-    3. 가속 종목 비율 50% 이상
+    3. 가속 태그 종목 비율 50% 이상
     """
     min_stocks = SUPPLY_PARAMS["leading_sector_min_stocks"]
     min_accel = SUPPLY_PARAMS["leading_sector_accel_ratio"]
 
     for sector in sector_list:
         conditions_met = 0
-        supply_60 = sum(
-            1 for s in sector.get("top_stocks", [])
-            if (s.get("score") or 0) >= 60
-        )
-        # 조건 확인은 supply_stock_count 기준
+
         if sector["supply_stock_count"] >= min_stocks:
             conditions_met += 1
         if sector["total_net_amount"] > 0:
@@ -169,16 +186,10 @@ def identify_leading_sectors(sector_list: list[dict]) -> list[dict]:
         if sector["accel_ratio"] >= min_accel:
             conditions_met += 1
 
-        # 보너스
-        bonus = 0
-        if sector["vdu_count"] > 0 or sector["breakout_count"] > 0:
-            bonus += 5
-        sector["leading_score"] = sector["avg_score"] + bonus
         sector["is_leading"] = conditions_met >= 2
 
-    # 정렬: 주도 섹터 우선, 그 안에서 점수순
     leading = [s for s in sector_list if s["is_leading"]]
-    leading.sort(key=lambda x: -x["leading_score"])
+    leading.sort(key=lambda x: -(x.get("total_net_amount") or 0))
 
     for i, s in enumerate(leading):
         s["rank"] = i + 1
@@ -195,9 +206,8 @@ def save_sector_analysis(sectors: list[dict], calc_date: str):
                 """INSERT OR REPLACE INTO sector_analysis
                    (sector_code, sector_name, sector_type, calc_date,
                     total_net_amount, supply_stock_count, avg_score,
-                    vdu_count, breakout_count, top_stocks,
-                    is_leading, rank)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    top_stocks, is_leading, rank)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     s["sector_code"],
                     s["sector_name"],
@@ -206,8 +216,6 @@ def save_sector_analysis(sectors: list[dict], calc_date: str):
                     s["total_net_amount"],
                     s["supply_stock_count"],
                     s["avg_score"],
-                    s["vdu_count"],
-                    s["breakout_count"],
                     json.dumps(s["top_stocks"], ensure_ascii=False),
                     1 if s.get("is_leading") else 0,
                     s.get("rank", 0),

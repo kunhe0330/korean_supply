@@ -35,24 +35,9 @@ API_RATE_LIMIT = {
 
 # ── 수급 분석 파라미터 ───────────────────────────────────
 SUPPLY_PARAMS = {
-    # 수급 스코어 임계값
-    "score_threshold_high": 75,
-    "score_threshold_mid": 50,
-    "score_threshold_low": 30,
-    # VDU 감지 파라미터
-    "vdu_big_move_pct": 20,        # BIG MOVE 최소 상승률 (%)
-    "vdu_big_move_days": 20,       # BIG MOVE 최소 연속 상승 거래일
-    "vdu_pullback_min": -15,       # Pullback 최대 하락 (%)
-    "vdu_pullback_max": -5,        # Pullback 최소 하락 (%)
-    "vdu_vol_ratio": 0.4,          # VDU 거래량 비율 (BIG MOVE 대비)
-    "vdu_vol_50d_ratio": 0.5,      # VDU 거래량 비율 (50일 평균 대비)
-    # Breakout 감지 파라미터
-    "breakout_vol_expansion": 2.0,  # 거래량 팽창 배수
-    "breakout_vol_power_min": 120,  # 최소 체결강도 (%)
-    "breakout_lookback": 20,        # 고가 돌파 확인 기간 (일)
     # 주도 섹터 판별
-    "leading_sector_min_stocks": 3,  # 최소 수급 종목 수
-    "leading_sector_accel_ratio": 0.5,  # 가속 종목 비율
+    "leading_sector_min_stocks": 3,      # 수급 유입 종목 최소 수
+    "leading_sector_accel_ratio": 0.5,   # 가속 태그 종목 비율
 }
 
 # ── 상대강도 보너스 ──────────────────────────────────────
