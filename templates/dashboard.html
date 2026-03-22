@@ -742,9 +742,10 @@ function getSector(st) {
     }
     if (Array.isArray(tl) && tl.length > 0) {
         const t = tl[0];
-        return THEME_NAME_MAP[t] || t || '-';
+        if (t) return THEME_NAME_MAP[t] || t;
     }
-    return '-';
+    // 4순위: market (KOSPI/KOSDAQ)
+    return st.market || '-';
 }
 
 function initTooltips() {
