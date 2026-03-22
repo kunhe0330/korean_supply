@@ -56,9 +56,14 @@ def aggregate_by_theme(calc_date: str) -> list[dict]:
                     "sector_name": r["theme_name"] or tid,
                     "sector_type": "THEME",
                     "stocks": [],
+                    "seen_codes": set(),
                     "total_net_amount": 0,
                     "accel_count": 0,
                 }
+            # 같은 테마 내 종목 중복 방지
+            if r["stock_code"] in themes[tid]["seen_codes"]:
+                continue
+            themes[tid]["seen_codes"].add(r["stock_code"])
             themes[tid]["stocks"].append(dict(r))
             themes[tid]["total_net_amount"] += r["net_today_amount"] or 0
             if r["acceleration_type"] in ("FULL_ACCEL", "SHORT_ACCEL", "REVERSAL"):
@@ -70,8 +75,14 @@ def aggregate_by_theme(calc_date: str) -> list[dict]:
             inflow_stocks = [s for s in stocks if s["is_inflow"]]
             scores = [s["ref_score"] for s in stocks if s["ref_score"]]
 
-            top_5 = [
-                {
+            # 중복 종목 제거 (같은 종목이 여러 테마 매핑으로 중복될 수 있음)
+            seen_codes = set()
+            top_5 = []
+            for s in stocks:
+                if s["stock_code"] in seen_codes:
+                    continue
+                seen_codes.add(s["stock_code"])
+                top_5.append({
                     "code": s["stock_code"],
                     "name": s["stock_name"],
                     "ref_score": s["ref_score"],
@@ -81,9 +92,9 @@ def aggregate_by_theme(calc_date: str) -> list[dict]:
                     "net_amount": s["net_today_amount"],
                     "vol_power": s["vol_power_today"],
                     "rs_1m": s["rel_strength_1m"],
-                }
-                for s in stocks[:5]
-            ]
+                })
+                if len(top_5) >= 5:
+                    break
 
             result.append({
                 "sector_code": tid,
