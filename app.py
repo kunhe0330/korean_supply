@@ -54,6 +54,26 @@ def run_backfill_api():
     return jsonify({"status": "backfill started", "message": "백그라운드에서 실행 중. /api/health로 진행 확인."})
 
 
+@app.route("/api/rebuild-sectors", methods=["POST"])
+def rebuild_sectors_api():
+    """특정 날짜의 섹터 분석만 재집계."""
+    from supply.sector import aggregate_by_theme, identify_leading_sectors, save_sector_analysis
+    date = request.args.get("date")
+    if not date:
+        conn = get_connection()
+        try:
+            row = conn.execute("SELECT MAX(calc_date) as d FROM supply_score").fetchone()
+            date = row["d"] if row else None
+        finally:
+            conn.close()
+    if not date:
+        return jsonify({"error": "데이터 없음"}), 404
+    sector_list = aggregate_by_theme(date)
+    leading = identify_leading_sectors(sector_list)
+    save_sector_analysis(sector_list, date)
+    return jsonify({"status": "ok", "date": date, "sectors": len(sector_list), "leading": len(leading)})
+
+
 @app.route("/api/health")
 def health():
     conn = get_connection()
