@@ -256,37 +256,25 @@ thead th .help-icon {
     border-radius: 50%;
     margin-left: 4px;
     cursor: help;
-    position: relative;
 }
 thead th .help-icon:hover { background: #3a4a5a; color: #fff; }
-.tooltip {
-    display: none;
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
+.tooltip-popup {
+    position: fixed;
     background: #2a3a4a;
     color: #e0e6ed;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
     font-weight: 400;
     white-space: normal;
-    width: 240px;
-    line-height: 1.5;
-    z-index: 200;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    width: 260px;
+    line-height: 1.6;
+    z-index: 9999;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    border: 1px solid #3a4a5a;
+    display: none;
 }
-.tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: #2a3a4a;
-}
-.help-icon:hover .tooltip { display: block; }
+.tooltip-popup.show { display: block; }
 
 tbody tr {
     border-bottom: 1px solid #1e2d3d;
@@ -383,6 +371,9 @@ tbody td {
 </head>
 <body>
 
+<!-- 툴팁 팝업 (fixed position) -->
+<div class="tooltip-popup" id="tooltipPopup"></div>
+
 <!-- 로딩 오버레이 -->
 <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>
@@ -460,29 +451,19 @@ tbody td {
                     <th>종목</th>
                     <th>섹터</th>
                     <th>순매수금액
-                        <span class="help-icon">?
-                            <span class="tooltip">당일 기관+외국인 순매수 합산 금액. 양수=순매수(빨강), 음수=순매도(파랑).</span>
-                        </span>
+                        <span class="help-icon" data-tip="당일 기관+외국인 순매수 합산 금액. 양수=순매수(빨강), 음수=순매도(파랑).">?</span>
                     </th>
                     <th>태그
-                        <span class="help-icon">?
-                            <span class="tooltip">수급 특성 태그. 가속=매수세 강화, 손바뀜=수급 주체 변경, 체결강도↑=체결강도 높음, 거래량↑=거래량 증가, RS강함=상대강도 우수.</span>
-                        </span>
+                        <span class="help-icon" data-tip="수급 특성 태그. 가속=매수세 강화, 손바뀜=수급 주체 변경, 체결강도↑=체결강도 높음, 거래량↑=거래량 증가, RS강함=상대강도 우수.">?</span>
                     </th>
                     <th>체결강도
-                        <span class="help-icon">?
-                            <span class="tooltip">매수체결량/매도체결량 비율(%). 100% 이상이면 매수 우위. 150% 이상은 강한 매수세.</span>
-                        </span>
+                        <span class="help-icon" data-tip="매수체결량/매도체결량 비율(%). 100% 이상이면 매수 우위. 150% 이상은 강한 매수세.">?</span>
                     </th>
                     <th>상대강도(RS)
-                        <span class="help-icon">?
-                            <span class="tooltip">1개월 기준 시장 대비 상대 수익률(%). 양수면 시장보다 강한 종목.</span>
-                        </span>
+                        <span class="help-icon" data-tip="1개월 기준 시장 대비 상대 수익률(%). 양수면 시장보다 강한 종목.">?</span>
                     </th>
                     <th>참고스코어
-                        <span class="help-icon">?
-                            <span class="tooltip">순매수금액, 체결강도, 태그 등을 종합한 참고 점수. 높을수록 수급 상황이 좋은 편.</span>
-                        </span>
+                        <span class="help-icon" data-tip="순매수금액, 체결강도, 태그 등을 종합한 참고 점수. 높을수록 수급 상황이 좋은 편.">?</span>
                     </th>
                 </tr>
             </thead>
@@ -508,6 +489,7 @@ let autoRefreshTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
     startAutoRefresh();
+    initTooltips();
 });
 
 function startAutoRefresh() {
@@ -686,7 +668,7 @@ function renderTable() {
                 <span class="stock-code">${esc(st.stock_code)}</span>
                 <span class="stock-market">${esc(st.market || '')}</span>
             </td>
-            <td class="sector-cell">${esc(st.sector_name || '')}</td>
+            <td class="sector-cell">${esc(getSector(st))}</td>
             <td class="${amtClass}">${amtStr}</td>
             <td>
                 <div class="tags-cell">${renderTags(st.tags)}</div>
@@ -727,6 +709,43 @@ function renderTags(tags) {
         const cls = TAG_CLASSES[t] || 'tag-default';
         return `<span class="tag-badge ${cls}">${esc(t)}</span>`;
     }).join('');
+}
+
+function getSector(st) {
+    if (st.sector_name) return st.sector_name;
+    // fallback: theme_list에서 첫번째 테마 추출
+    let tl = st.theme_list;
+    if (!tl) return '-';
+    if (typeof tl === 'string') {
+        try { tl = JSON.parse(tl); } catch(e) { return tl; }
+    }
+    if (Array.isArray(tl) && tl.length > 0) return tl[0];
+    return '-';
+}
+
+function initTooltips() {
+    const popup = document.getElementById('tooltipPopup');
+    document.addEventListener('click', (e) => {
+        const icon = e.target.closest('.help-icon[data-tip]');
+        if (icon) {
+            e.stopPropagation();
+            const tip = icon.getAttribute('data-tip');
+            popup.textContent = tip;
+            // 아이콘 위치 기준으로 팝업 표시
+            const rect = icon.getBoundingClientRect();
+            let left = rect.left + rect.width / 2 - 130;
+            let top = rect.bottom + 8;
+            // 화면 밖으로 나가지 않게 조정
+            if (left < 8) left = 8;
+            if (left + 260 > window.innerWidth) left = window.innerWidth - 268;
+            if (top + 100 > window.innerHeight) top = rect.top - 80;
+            popup.style.left = left + 'px';
+            popup.style.top = top + 'px';
+            popup.classList.add('show');
+        } else {
+            popup.classList.remove('show');
+        }
+    });
 }
 
 function esc(str) {
