@@ -267,16 +267,15 @@ thead th .help-icon:hover { background: #3a4a5a; color: #fff; }
     transform: translateX(-50%);
     background: #2a3a4a;
     color: #e0e6ed;
-    padding: 8px 12px;
+    padding: 10px 14px;
     border-radius: 8px;
     font-size: 12px;
     font-weight: 400;
     white-space: normal;
-    width: 220px;
+    width: 240px;
     line-height: 1.5;
     z-index: 200;
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    pointer-events: none;
 }
 .tooltip::after {
     content: '';
@@ -327,6 +326,7 @@ tbody td {
 .ref-high { color: #ffd93d; }
 .ref-mid { color: #e0e6ed; }
 .ref-low { color: #667788; }
+.sector-cell { color: #8899aa; font-size: 12px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── 로딩 & 에러 ─────────────── */
 .loading-overlay {
@@ -458,6 +458,7 @@ tbody td {
                 <tr>
                     <th>#</th>
                     <th>종목</th>
+                    <th>섹터</th>
                     <th>순매수금액
                         <span class="help-icon">?
                             <span class="tooltip">당일 기관+외국인 순매수 합산 금액. 양수=순매수(빨강), 음수=순매도(파랑).</span>
@@ -649,7 +650,7 @@ function renderTable() {
 
     const tbody = document.getElementById('stockTableBody');
     if (!stocks.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#667788;">해당 종목이 없습니다</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:#667788;">해당 종목이 없습니다</td></tr>';
         return;
     }
 
@@ -685,6 +686,7 @@ function renderTable() {
                 <span class="stock-code">${esc(st.stock_code)}</span>
                 <span class="stock-market">${esc(st.market || '')}</span>
             </td>
+            <td class="sector-cell">${esc(st.sector_name || '')}</td>
             <td class="${amtClass}">${amtStr}</td>
             <td>
                 <div class="tags-cell">${renderTags(st.tags)}</div>
