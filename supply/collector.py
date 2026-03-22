@@ -17,6 +17,43 @@ from kis.api import (
 
 logger = logging.getLogger(__name__)
 
+# KIS 업종 대분류 코드 → 한글 업종명 매핑
+KRX_SECTOR_MAP = {
+    "001": "음식료품",
+    "002": "전기전자",
+    "003": "의약품",
+    "004": "비금속광물",
+    "005": "철강금속",
+    "006": "기계",
+    "007": "화학",
+    "008": "섬유의복",
+    "009": "유통업",
+    "010": "건설업",
+    "011": "운수장비",
+    "012": "운수창고",
+    "013": "통신업",
+    "014": "전기가스",
+    "015": "은행",
+    "016": "증권",
+    "017": "보험",
+    "018": "서비스업",
+    "019": "종이목재",
+    "020": "기타금융",
+    "021": "기타제조",
+    "022": "의료정밀",
+    "024": "IT",
+    "025": "반도체",
+    "026": "소프트웨어",
+    "027": "디지털컨텐츠",
+    "028": "인터넷",
+    "029": "바이오",
+    "030": "게임",
+    "031": "통신장비",
+    "032": "정보기기",
+    "033": "방송서비스",
+    "034": "기타서비스",
+}
+
 
 # ── 종목 마스터 ──────────────────────────────────────────
 
@@ -33,6 +70,11 @@ def refresh_stock_master(stock_codes: list[str]):
             info = fetch_stock_info(code)
             if not info:
                 continue
+            sector_large = info.get("idx_bztp_lcls_cd", "")
+            sector_name = info.get("bstp_kor_isnm", "")
+            # bstp_kor_isnm이 비어있으면 업종 대분류 코드로 한글명 매핑
+            if not sector_name and sector_large:
+                sector_name = KRX_SECTOR_MAP.get(sector_large, "")
             conn.execute(
                 """INSERT OR REPLACE INTO stock_master
                    (stock_code, stock_name, market, sector_large, sector_medium,
@@ -42,10 +84,10 @@ def refresh_stock_master(stock_codes: list[str]):
                     code,
                     info.get("prdt_abrv_name", ""),
                     "KOSPI" if info.get("mket_id_cd") == "STK" else "KOSDAQ",
-                    info.get("idx_bztp_lcls_cd", ""),
+                    sector_large,
                     info.get("idx_bztp_mcls_cd", ""),
                     info.get("idx_bztp_scls_cd", ""),
-                    info.get("bstp_kor_isnm", ""),
+                    sector_name,
                     now,
                 ),
             )
