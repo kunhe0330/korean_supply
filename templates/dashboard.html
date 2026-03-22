@@ -711,15 +711,39 @@ function renderTags(tags) {
     }).join('');
 }
 
+const KRX_SECTOR_MAP = {
+    '001': '음식료품', '002': '전기전자', '003': '의약품', '004': '비금속광물',
+    '005': '철강금속', '006': '기계', '007': '화학', '008': '섬유의복',
+    '009': '유통업', '010': '건설업', '011': '운수장비', '012': '운수창고',
+    '013': '통신업', '014': '전기가스', '015': '은행', '016': '증권',
+    '017': '보험', '018': '서비스업', '019': '종이목재', '020': '기타금융',
+    '021': '기타제조', '022': '의료정밀', '024': 'IT', '025': '반도체',
+    '026': '소프트웨어', '027': '디지털컨텐츠', '028': '인터넷', '029': '바이오',
+    '030': '게임', '031': '통신장비', '032': '정보기기', '033': '방송서비스',
+    '034': '기타서비스',
+};
+
+const THEME_NAME_MAP = {
+    'NUCLEAR': '원자력', 'SEMICONDUCTOR': '반도체', 'BATTERY': '2차전지',
+    'BIO': '바이오', 'DEFENSE': '방산', 'ROBOT': '로봇', 'AI': 'AI',
+    'HYDROGEN': '수소', 'SOLAR': '태양광', 'EV': '전기차',
+};
+
 function getSector(st) {
+    // 1순위: sector_name (DB에 저장된 업종명)
     if (st.sector_name) return st.sector_name;
-    // fallback: theme_list에서 첫번째 테마 추출
+    // 2순위: sector_code → KRX 업종 매핑
+    if (st.sector_code && KRX_SECTOR_MAP[st.sector_code]) return KRX_SECTOR_MAP[st.sector_code];
+    // 3순위: theme_list에서 첫번째 테마
     let tl = st.theme_list;
     if (!tl) return '-';
     if (typeof tl === 'string') {
         try { tl = JSON.parse(tl); } catch(e) { return tl; }
     }
-    if (Array.isArray(tl) && tl.length > 0) return tl[0];
+    if (Array.isArray(tl) && tl.length > 0) {
+        const t = tl[0];
+        return THEME_NAME_MAP[t] || t || '-';
+    }
     return '-';
 }
 
