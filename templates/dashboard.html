@@ -54,9 +54,11 @@ body {
 .header-refresh.loading { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-.auto-refresh-label {
+.refresh-info {
     font-size: 12px;
-    color: #667788;
+    color: #8899aa;
+    text-align: right;
+    line-height: 1.5;
 }
 
 /* ── 요약 카드 ────────────────── */
@@ -386,7 +388,7 @@ tbody td {
         <span class="header-date" id="headerDate">-</span>
     </div>
     <div class="header-right">
-        <span class="auto-refresh-label" id="autoRefreshLabel">자동 새로고침 5분</span>
+        <span class="refresh-info" id="refreshInfo"></span>
         <button class="header-refresh" id="refreshBtn" onclick="loadData()">&#x21bb; 새로고침</button>
     </div>
 </div>
@@ -523,6 +525,25 @@ async function loadData() {
 function renderDashboard(data) {
     // 날짜
     document.getElementById('headerDate').textContent = data.date || '-';
+
+    // 갱신 시간 표시
+    const refreshInfo = document.getElementById('refreshInfo');
+    const lastUpdated = data.last_updated;
+    const nextRefresh = data.next_refresh;
+    let infoText = '';
+    if (lastUpdated) {
+        infoText = lastUpdated + ' 기준 새로고침';
+    } else {
+        // last_updated 없으면 날짜로 표시
+        const d = data.date || '';
+        if (d.length === 8) {
+            infoText = d.slice(0,4) + '년 ' + d.slice(4,6) + '월 ' + d.slice(6,8) + '일 기준';
+        }
+    }
+    if (nextRefresh) {
+        infoText += ' (다음 갱신 ' + nextRefresh + ')';
+    }
+    refreshInfo.textContent = infoText;
 
     // 요약
     const s = data.summary || {};

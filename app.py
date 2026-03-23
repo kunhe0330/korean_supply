@@ -5,6 +5,7 @@ KIS Supply-Demand Sector Analyzer — Flask 메인 앱 v3
 import json
 import logging
 import os
+from datetime import datetime
 
 from flask import Flask, jsonify, request, render_template
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 _scheduler = None
+_last_analysis_time = None  # 마지막 분석 완료 시간
 
 
 @app.before_request
@@ -160,6 +162,16 @@ def supply_report():
         vp_high = len([s for s in stocks if (s.get("vol_power_today") or 0) >= 150])
         rs_strong = len([s for s in stocks if (s.get("rel_strength_1m") or 0) >= 5])
 
+        # 다음 갱신 시간 계산
+        POLL_TIMES = ["09:40", "11:30", "13:30", "14:40", "15:35"]
+        now = datetime.now()
+        now_hm = now.strftime("%H:%M")
+        next_refresh = None
+        for pt in POLL_TIMES:
+            if pt > now_hm:
+                next_refresh = pt
+                break
+
         return jsonify({
             "date": date,
             "leading_sectors": leading,
@@ -170,6 +182,8 @@ def supply_report():
                 "vp_high_count": vp_high,
                 "rs_strong_count": rs_strong,
             },
+            "last_updated": _last_analysis_time,
+            "next_refresh": next_refresh,
         })
 
     finally:

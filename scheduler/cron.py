@@ -4,7 +4,7 @@ APScheduler 스케줄 관리
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,7 +18,7 @@ def _is_weekday():
 
 
 def job_intraday_poll():
-    """장중 수급 폴링 (09:40, 11:30, 13:30, 14:40)."""
+    """장중 수급 폴링 (09:40, 11:30, 13:30, 14:40) + supply_score 갱신."""
     if not _is_weekday():
         return
 
@@ -29,6 +29,69 @@ def job_intraday_poll():
     result = poll_intraday_supply()
     if result["alerts"] or result["sector_rotation"]:
         send_intraday_alert(result["alerts"], result["sector_rotation"])
+
+    # 장중에도 대시보드 업데이트: 수급 데이터 수집 + 분석
+    try:
+        _run_intraday_analysis()
+    except Exception as e:
+        logger.warning("장중 분석 실패 (무시): %s", e)
+
+
+def _run_intraday_analysis():
+    """장중 수급 데이터 수집 + 분석 실행 (대시보드 갱신용)."""
+    from supply.collector import collect_top_supply_stocks, collect_investor_trade_daily, refresh_stock_master
+    from supply.price_collector import collect_ohlcv, collect_index_daily
+    from supply.analyzer import run_analysis
+    from supply.theme_mapper import run_theme_update
+
+    today = datetime.now().strftime("%Y%m%d")
+    start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
+
+    # 1. TOP 종목 수집
+    top_codes = collect_top_supply_stocks()
+    if not top_codes:
+        logger.warning("장중 분석: TOP 종목 없음")
+        return
+
+    logger.info("장중 분석 시작: %d종목", len(top_codes))
+
+    # 2. 종목 마스터 갱신 (신규 종목만)
+    from db.migrations import get_connection
+    conn = get_connection()
+    try:
+        existing = set(r["stock_code"] for r in
+                       conn.execute("SELECT stock_code FROM stock_master WHERE sector_large IS NOT NULL AND sector_large != ''").fetchall())
+    finally:
+        conn.close()
+    new_codes = [c for c in top_codes if c not in existing]
+    if new_codes:
+        refresh_stock_master(new_codes)
+
+    # 3. 수급 데이터 수집
+    collect_investor_trade_daily(top_codes, today)
+
+    # 4. OHLCV + 지수 수집
+    collect_ohlcv(top_codes, start_date, today)
+    collect_index_daily(start_date)
+
+    # 5. 테마 매핑 (캐시 있으면 빠름)
+    try:
+        run_theme_update()
+    except Exception as e:
+        logger.warning("테마 매핑 실패 (무시): %s", e)
+
+    # 6. 분석 실행
+    result = run_analysis(top_codes)
+    inflow_count = sum(1 for r in result.get("stock_results", []) if r.get("is_inflow"))
+    leading_count = len(result.get("leading_sectors", []))
+    logger.info("장중 분석 완료: 수급유입 %d개, 주도섹터 %d개", inflow_count, leading_count)
+
+    # 앱에 마지막 분석 시간 기록
+    try:
+        import app as app_module
+        app_module._last_analysis_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        pass
 
 
 def job_daily_batch():
@@ -45,6 +108,11 @@ def job_daily_batch():
     if top_codes:
         run_price_collection(top_codes)
         run_analysis(top_codes)
+        try:
+            import app as app_module
+            app_module._last_analysis_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            pass
 
 
 def job_daily_report():
