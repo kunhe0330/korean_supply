@@ -269,14 +269,17 @@ thead th .help-icon:hover { background: #3a4a5a; color: #fff; }
     font-size: 13px;
     font-weight: 400;
     white-space: normal;
-    width: 260px;
+    max-width: 300px;
+    min-width: 200px;
     line-height: 1.6;
     z-index: 9999;
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     border: 1px solid #3a4a5a;
-    display: none;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
 }
-.tooltip-popup.show { display: block; }
+.tooltip-popup.show { opacity: 1; pointer-events: auto; }
 
 tbody tr {
     border-bottom: 1px solid #1e2d3d;
@@ -532,18 +535,17 @@ function renderDashboard(data) {
     const nextRefresh = data.next_refresh;
     let infoText = '';
     if (lastUpdated) {
-        infoText = lastUpdated + ' 기준 새로고침';
+        infoText = lastUpdated + ' 기준';
     } else {
-        // last_updated 없으면 날짜로 표시
         const d = data.date || '';
         if (d.length === 8) {
             infoText = d.slice(0,4) + '년 ' + d.slice(4,6) + '월 ' + d.slice(6,8) + '일 기준';
         }
     }
     if (nextRefresh) {
-        infoText += ' (다음 갱신 ' + nextRefresh + ')';
+        infoText += '\n다음 갱신: ' + nextRefresh;
     }
-    refreshInfo.textContent = infoText;
+    refreshInfo.innerHTML = infoText.replace('\n', '<br>');
 
     // 요약
     const s = data.summary || {};
@@ -751,43 +753,67 @@ const THEME_NAME_MAP = {
 };
 
 function getSector(st) {
-    // 1순위: sector_name (DB에 저장된 업종명)
-    if (st.sector_name) return st.sector_name;
-    // 2순위: sector_code → KRX 업종 매핑
-    if (st.sector_code && KRX_SECTOR_MAP[st.sector_code]) return KRX_SECTOR_MAP[st.sector_code];
-    // 3순위: theme_list에서 첫번째 테마
+    // 1순위: theme_list에서 첫번째 테마 (가장 구체적인 분류)
     let tl = st.theme_list;
-    if (!tl) return '-';
-    if (typeof tl === 'string') {
-        try { tl = JSON.parse(tl); } catch(e) { return tl; }
+    if (typeof tl === 'string' && tl) {
+        try { tl = JSON.parse(tl); } catch(e) { tl = [tl]; }
     }
     if (Array.isArray(tl) && tl.length > 0) {
         const t = tl[0];
         if (t) return THEME_NAME_MAP[t] || t;
     }
+    // 2순위: sector_name (DB stock_master 업종명)
+    if (st.sector_name) return st.sector_name;
+    // 3순위: sector_code → KRX 업종 매핑
+    if (st.sector_code && KRX_SECTOR_MAP[st.sector_code]) return KRX_SECTOR_MAP[st.sector_code];
     // 4순위: market (KOSPI/KOSDAQ)
     return st.market || '-';
 }
 
 function initTooltips() {
     const popup = document.getElementById('tooltipPopup');
+
+    // 호버로 툴팁 표시
+    document.addEventListener('mouseover', (e) => {
+        const icon = e.target.closest('.help-icon[data-tip]');
+        if (!icon) return;
+        const tip = icon.getAttribute('data-tip');
+        popup.textContent = tip;
+        popup.classList.add('show');
+
+        // 아이콘 위치 기준 팝업 배치
+        const rect = icon.getBoundingClientRect();
+        const popW = 300;
+
+        // 좌우 위치: 아이콘 중앙 기준, 화면 밖 안 나가게
+        let left = rect.left + rect.width / 2 - popW / 2;
+        if (left < 8) left = 8;
+        if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+
+        // 상하 위치: 기본은 아래, 공간 부족하면 위
+        let top = rect.bottom + 10;
+        if (top + 120 > window.innerHeight) {
+            top = rect.top - 10;
+            popup.style.transform = 'translateY(-100%)';
+        } else {
+            popup.style.transform = 'none';
+        }
+
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        const icon = e.target.closest('.help-icon[data-tip]');
+        if (icon) popup.classList.remove('show');
+    });
+
+    // 클릭으로도 토글
     document.addEventListener('click', (e) => {
         const icon = e.target.closest('.help-icon[data-tip]');
         if (icon) {
             e.stopPropagation();
-            const tip = icon.getAttribute('data-tip');
-            popup.textContent = tip;
-            // 아이콘 위치 기준으로 팝업 표시
-            const rect = icon.getBoundingClientRect();
-            let left = rect.left + rect.width / 2 - 130;
-            let top = rect.bottom + 8;
-            // 화면 밖으로 나가지 않게 조정
-            if (left < 8) left = 8;
-            if (left + 260 > window.innerWidth) left = window.innerWidth - 268;
-            if (top + 100 > window.innerHeight) top = rect.top - 80;
-            popup.style.left = left + 'px';
-            popup.style.top = top + 'px';
-            popup.classList.add('show');
+            popup.classList.toggle('show');
         } else {
             popup.classList.remove('show');
         }

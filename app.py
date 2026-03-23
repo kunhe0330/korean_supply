@@ -5,9 +5,11 @@ KIS Supply-Demand Sector Analyzer — Flask 메인 앱 v3
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from flask import Flask, jsonify, request, render_template
+
+KST = timezone(timedelta(hours=9))
 
 from db.migrations import init_db, get_connection
 from scheduler.cron import init_scheduler
@@ -120,7 +122,7 @@ def supply_report():
             return jsonify({"error": "데이터 없음"}), 404
 
         query = """
-            SELECT ss.*, sm.stock_name, sm.market
+            SELECT ss.*, sm.stock_name, sm.market, sm.sector_code, sm.sector_name
             FROM supply_score ss
             JOIN stock_master sm ON ss.stock_code = sm.stock_code
             WHERE ss.calc_date = ?
@@ -162,15 +164,28 @@ def supply_report():
         vp_high = len([s for s in stocks if (s.get("vol_power_today") or 0) >= 150])
         rs_strong = len([s for s in stocks if (s.get("rel_strength_1m") or 0) >= 5])
 
-        # 다음 갱신 시간 계산
+        # 다음 갱신 시간 계산 (KST 기준)
         POLL_TIMES = ["09:40", "11:30", "13:30", "14:40", "15:35"]
-        now = datetime.now()
-        now_hm = now.strftime("%H:%M")
+        now_kst = datetime.now(KST)
+        now_hm = now_kst.strftime("%H:%M")
         next_refresh = None
         for pt in POLL_TIMES:
             if pt > now_hm:
                 next_refresh = pt
                 break
+        if not next_refresh:
+            # 오늘 모든 갱신 완료 → 다음 영업일 첫 갱신
+            next_refresh = "내일 09:40"
+
+        # last_updated: DB에서 가장 최근 calc_date 기반
+        last_updated_str = None
+        if _last_analysis_time:
+            last_updated_str = _last_analysis_time
+        elif date:
+            # DB 날짜 기반 표시
+            d = date
+            if len(d) == 8:
+                last_updated_str = f"{d[:4]}년 {d[4:6]}월 {d[6:8]}일"
 
         return jsonify({
             "date": date,
@@ -182,7 +197,7 @@ def supply_report():
                 "vp_high_count": vp_high,
                 "rs_strong_count": rs_strong,
             },
-            "last_updated": _last_analysis_time,
+            "last_updated": last_updated_str,
             "next_refresh": next_refresh,
         })
 
