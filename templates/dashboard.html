@@ -764,9 +764,7 @@ function getSector(st) {
     }
     // 2순위: sector_name (DB stock_master 업종명)
     if (st.sector_name) return st.sector_name;
-    // 3순위: sector_code → KRX 업종 매핑
-    if (st.sector_code && KRX_SECTOR_MAP[st.sector_code]) return KRX_SECTOR_MAP[st.sector_code];
-    // 4순위: market (KOSPI/KOSDAQ)
+    // 3순위: market
     return st.market || '-';
 }
 
