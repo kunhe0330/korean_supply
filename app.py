@@ -122,7 +122,7 @@ def supply_report():
             return jsonify({"error": "데이터 없음"}), 404
 
         query = """
-            SELECT ss.*, sm.stock_name, sm.market, sm.sector_code, sm.sector_name
+            SELECT ss.*, sm.stock_name, sm.market, sm.sector_name
             FROM supply_score ss
             JOIN stock_master sm ON ss.stock_code = sm.stock_code
             WHERE ss.calc_date = ?
