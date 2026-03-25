@@ -21,19 +21,17 @@ logger = logging.getLogger(__name__)
 
 def _fetch_naver_sector(stock_code: str) -> str:
     """Naver 금융에서 종목의 업종명을 크롤링."""
+    import re
     try:
         url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
         headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, headers=headers, timeout=5)
         resp.raise_for_status()
-        # <h4 class="h_sub sub_tit7"><a href="...">업종명</a></h4> 패턴
-        import re
-        # 업종 링크에서 업종명 추출
-        m = re.search(r'class="h_sub sub_tit7">\s*<a[^>]*>([^<]+)</a>', resp.text)
-        if m:
-            return m.group(1).strip()
-        # 다른 패턴: 코스닥 종목
-        m = re.search(r'업종</th>\s*<td[^>]*>\s*<a[^>]*>([^<]+)</a>', resp.text)
+        # 업종비교 섹션의 sise_group_detail 링크에서 업종명 추출
+        m = re.search(
+            r'sise_group_detail\.naver\?type=upjong&no=\d+">([^<]+)</a>',
+            resp.text,
+        )
         if m:
             return m.group(1).strip()
     except Exception as e:
