@@ -262,22 +262,22 @@ thead th .help-icon {
 thead th .help-icon:hover { background: #3a4a5a; color: #fff; }
 .tooltip-popup {
     position: fixed;
-    background: #2a3a4a;
+    background: #1a2a3a;
     color: #e0e6ed;
-    padding: 12px 16px;
+    padding: 14px 18px;
     border-radius: 10px;
     font-size: 13px;
     font-weight: 400;
     white-space: normal;
-    max-width: 300px;
-    min-width: 200px;
-    line-height: 1.6;
-    z-index: 9999;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    border: 1px solid #3a4a5a;
+    width: 320px;
+    line-height: 1.7;
+    z-index: 99999;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+    border: 1px solid #4a5a6a;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s;
+    transition: opacity 0.2s;
+    word-break: keep-all;
 }
 .tooltip-popup.show { opacity: 1; pointer-events: auto; }
 
@@ -781,21 +781,25 @@ function initTooltips() {
 
         // 아이콘 위치 기준 팝업 배치
         const rect = icon.getBoundingClientRect();
-        const popW = 300;
+        const popW = 320;
 
-        // 좌우 위치: 아이콘 중앙 기준, 화면 밖 안 나가게
-        let left = rect.left + rect.width / 2 - popW / 2;
-        if (left < 8) left = 8;
-        if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
-
-        // 상하 위치: 기본은 아래, 공간 부족하면 위
-        let top = rect.bottom + 10;
-        if (top + 120 > window.innerHeight) {
-            top = rect.top - 10;
-            popup.style.transform = 'translateY(-100%)';
-        } else {
-            popup.style.transform = 'none';
+        // 좌우 위치: 아이콘 왼쪽에 배치 (오른쪽 짤림 방지)
+        let left = rect.left - popW - 10;
+        if (left < 8) {
+            // 왼쪽 공간 부족하면 오른쪽에 배치
+            left = rect.right + 10;
         }
+        if (left + popW > window.innerWidth - 8) {
+            left = window.innerWidth - popW - 8;
+        }
+
+        // 상하 위치: 아이콘 중앙 기준
+        let top = rect.top - 20;
+        if (top < 8) top = 8;
+        if (top + 100 > window.innerHeight) {
+            top = window.innerHeight - 120;
+        }
+        popup.style.transform = 'none';
 
         popup.style.left = left + 'px';
         popup.style.top = top + 'px';

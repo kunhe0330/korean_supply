@@ -6,6 +6,7 @@
 """
 
 import logging
+import requests
 from datetime import datetime, timedelta
 
 from db.migrations import get_connection
@@ -16,6 +17,28 @@ from kis.api import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _fetch_naver_sector(stock_code: str) -> str:
+    """Naver 금융에서 종목의 업종명을 크롤링."""
+    try:
+        url = f"https://finance.naver.com/item/main.naver?code={stock_code}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        # <h4 class="h_sub sub_tit7"><a href="...">업종명</a></h4> 패턴
+        import re
+        # 업종 링크에서 업종명 추출
+        m = re.search(r'class="h_sub sub_tit7">\s*<a[^>]*>([^<]+)</a>', resp.text)
+        if m:
+            return m.group(1).strip()
+        # 다른 패턴: 코스닥 종목
+        m = re.search(r'업종</th>\s*<td[^>]*>\s*<a[^>]*>([^<]+)</a>', resp.text)
+        if m:
+            return m.group(1).strip()
+    except Exception as e:
+        logger.debug("Naver 업종 크롤링 실패 (%s): %s", stock_code, e)
+    return ""
 
 # KIS 업종 대분류 코드 → 한글 업종명 매핑
 KRX_SECTOR_MAP = {
@@ -75,6 +98,9 @@ def refresh_stock_master(stock_codes: list[str]):
             # bstp_kor_isnm이 비어있으면 업종 대분류 코드로 한글명 매핑
             if not sector_name and sector_large:
                 sector_name = KRX_SECTOR_MAP.get(sector_large, "")
+            # 그래도 비어있으면 Naver 금융에서 크롤링
+            if not sector_name:
+                sector_name = _fetch_naver_sector(code)
             conn.execute(
                 """INSERT OR REPLACE INTO stock_master
                    (stock_code, stock_name, market, sector_large, sector_medium,
